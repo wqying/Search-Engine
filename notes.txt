@@ -1,0 +1,38 @@
+Planning doc for my own use.
+
+Inverted Index:
+- data structure in IR systems
+- maps words to their occurences within a set of docs
+- fast querying, no need to scan entire document to look for words
+
+Data Collection:
+- foundation of building robust inverted index
+- in our case, web scraping was used
+- also the zip file provided by the professor
+
+Data Cleaning:
+- tokenize
+- do not use stopping!
+- use stemming (Porter stemming)
+- must deal with bolded words, headings, titles as more important
+- can get rid of punctuation though; lowercasing
+
+Deliverables:
+- number of indexed documents
+- number of unique tokens
+- total size of index on disk
+
+Project Structure:
+Search-Engine/
+├── ANALYST/
+│   └── ... corpus JSON files ...
+├── parser.py # M1 (open JSON, parse, extract, return clean data)
+├── text_processing.py # M1 (tokenize, stem)
+├── indexer.py # M1 (ask parser.py for text, ask text_processing.py for tokens)
+├── search.py # M2
+├── index_data/ # generated files
+│   ├── inverted_index.json
+│   ├── doc_map.json
+│   └── stats.json
+├── notes.txt
+└── README.md
