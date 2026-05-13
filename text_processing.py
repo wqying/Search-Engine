@@ -2,7 +2,7 @@
 Most of the code here is from my submission for Assignment 1, tokenization
 """
 
-import sys
+# import sys
 from nltk.stem import PorterStemmer
 
 
