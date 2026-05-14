@@ -23,7 +23,7 @@ def count_document_terms(sections):
     weighted_counts = defaultdict(int)
 
     for text, weight in sections:
-        tokens = stem_tokens(tokenize_text(text))
+        tokens = stem_tokens(tokenize_text(text))  # stem first then count
 
         for token in tokens:
             raw_counts[token] += 1
