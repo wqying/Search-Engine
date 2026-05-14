@@ -1,8 +1,7 @@
 import json
-import sys
-from pathlib import Path
-
+import warnings
 from bs4 import BeautifulSoup
+from bs4 import XMLParsedAsHTMLWarning
 
 
 TAG_WEIGHTS = {
@@ -33,7 +32,10 @@ def parse_document(file_path):
 
     url = document.get("url", "")
     html = document.get("content", "")
-    soup = BeautifulSoup(html, "html.parser")
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", XMLParsedAsHTMLWarning) # supress warnings
+        soup = BeautifulSoup(html, "html.parser")
 
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()  # ignores non-text content
@@ -54,4 +56,3 @@ def parse_document(file_path):
         "url": url,
         "sections": sections,
     }
-
