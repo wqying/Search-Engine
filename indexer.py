@@ -76,14 +76,7 @@ def get_directory_size(directory):
         if file_path.is_file():
             total_size += file_path.stat().st_size
 
-    return total_size
-
-
-def escape_pdf_text(text):
-    """
-    Escapes text so it can be safely written inside a simple PDF text object.
-    """
-    return str(text).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+    return total_size // 1024  # convert bytes to KB
 
 
 def save_index(inverted_index, doc_map, output_dir):
@@ -116,7 +109,9 @@ def main():
     inverted_index, doc_map = build_index("ANALYST")
     stats = save_index(inverted_index, doc_map, "index_data")
 
-    print(stats)
+    print(f"No. Documents indexed: {stats['documents']}\n"
+          f"No. Unique tokens: {stats['unique_tokens']}\n"
+          f"Index size (KB): {stats['index_size_bytes']}")
 
 
 if __name__ == "__main__":
