@@ -28,8 +28,6 @@ def tokenize_text(text):
         yield current_token
 
 
-# Runtime is O(n), where n is the number of characters in the text
-# tokenize_text processes each character once with O(n), and appending each token to the list is O(1) per token, so this still remains linear in the size of the input
 def tokenize(text):
     tokens = []
     for token in tokenize_text(text):
