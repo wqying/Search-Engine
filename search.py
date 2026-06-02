@@ -7,7 +7,7 @@ from text_processing import stem_tokens, tokenize_text
 
 
 DEFAULT_INDEX_DIR = "index_data"
-REQUIRED_QUERIES = [
+REQUIRED_QUERIES = [ # just for M2
     "cristina lopes",
     "machine learning",
     "ACM",
