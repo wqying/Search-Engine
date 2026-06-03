@@ -1,6 +1,7 @@
 import argparse
 import json
 import time
+import math
 from pathlib import Path
 
 from text_processing import stem_tokens, tokenize_text
@@ -40,7 +41,8 @@ def normalize_query(query):
 
 def search(query, inverted_index, doc_map, top_k=5):
     """
-    Runs an AND query and returns the top results ranked by summed weighted_tf.
+    Runs an AND query and returns the top results ranked by weighted tf-idf.
+    Ranking formula: score(document, query) = sum(weighted_tf(term, document) * idf(term))
     """
     query_tokens = normalize_query(query)
 
@@ -52,10 +54,10 @@ def search(query, inverted_index, doc_map, top_k=5):
         postings = inverted_index.get(token)
         if postings is None:
             return []
-        postings_by_token.append(postings)
+        postings_by_token.append((token, postings))
 
     matching_doc_ids = None
-    for postings in postings_by_token:
+    for _, postings in postings_by_token:
         doc_ids = {posting["doc_id"] for posting in postings}
         if matching_doc_ids is None:
             matching_doc_ids = doc_ids
@@ -65,14 +67,20 @@ def search(query, inverted_index, doc_map, top_k=5):
     if not matching_doc_ids:
         return []
 
+    total_documents = len(doc_map)
     scores = {doc_id: 0 for doc_id in matching_doc_ids}
     term_frequencies = {doc_id: 0 for doc_id in matching_doc_ids}
 
-    for postings in postings_by_token:
+    for _, postings in postings_by_token:
+        document_frequency = len(postings)
+        inverse_document_frequency = math.log(
+            total_documents + 1 / (document_frequency + 1)
+            ) + 1 # normalized idf fomula
+
         for posting in postings:
             doc_id = posting["doc_id"]
             if doc_id in matching_doc_ids:
-                scores[doc_id] += posting["weighted_tf"]
+                scores[doc_id] += posting["weighted_tf"] * inverse_document_frequency
                 term_frequencies[doc_id] += posting["tf"]
 
     ranked_doc_ids = sorted(
@@ -102,7 +110,7 @@ def print_results(query, results, elapsed_time):
 
     for rank, result in enumerate(results, start=1):
         print(f"{rank}. {result['url']}")
-        print(f"   score={result['score']} tf={result['tf']}")
+        print(f"   score={result['score']:.4f} tf={result['tf']}")
 
 
 def print_required_queries(index_dir):

@@ -54,5 +54,6 @@ def parse_document(file_path):
 
     return {
         "url": url,
-        "sections": sections,
+        "text": normal_text,  # specifically used for duplicate detection
+        "sections": sections,  # used for weighted indexing
     }
