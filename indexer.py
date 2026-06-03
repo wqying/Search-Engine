@@ -99,6 +99,9 @@ def get_bigrams(tokens): # decided to just do 2-grams instead of 3
 
 
 def compute_pagerank(link_graph, total_documents, damping=0.85, iterations=30):
+    """
+    PageRank logic and formula
+    """
     ranks = {doc_id: 1 / total_documents for doc_id in range(total_documents)}
 
     for _ in range(iterations):
