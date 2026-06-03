@@ -102,6 +102,7 @@ def get_minimum_query_span(query_tokens, document_positions):
 def search(query, inverted_index, bigram_index, pagerank, doc_map, top_k=10, offset=0):
     """
     Runs an OR query and returns the top results ranked by weighted tf-idf, proximity, and bigram matches.
+    formula: score = (weighted tf-idf + proximity * 2 + bigram * 4) * query_coverage + normalized_pagerank * 10
     """
     query_tokens = normalize_query(query)
     query_bigrams = get_bigrams(query_tokens)
