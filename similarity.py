@@ -1,10 +1,10 @@
+"""
+Most of the code here is from my submission for Assignment 2
+"""
 SIMHASH_BITS = 64
 
 
 def stable_hash_64(text):
-    """
-    FNV-1a 64-bit hash implemented from scratch.
-    """
     hash_value = 1469598103934665603
     fnv_prime = 1099511628211
 
@@ -16,9 +16,6 @@ def stable_hash_64(text):
 
 
 def compute_simhash(tokens):
-    """
-    SimHash implementation from scratch.
-    """
     vector = [0] * SIMHASH_BITS
 
     for token in tokens:

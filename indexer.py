@@ -1,5 +1,10 @@
+"""
+Assignment 3 Group:
+Qian Ying Wong, 49411619
+"""
+
 import json
-import sys
+# import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -8,7 +13,9 @@ from text_processing import stem_tokens, tokenize_text
 from similarity import compute_simhash, hamming_distance, stable_hash_64
 
 
-NEAR_DUPLICATE_THRESHOLD = 3
+NEAR_DUPLICATE_THRESHOLD = 1
+# the smaller the threshold, less documents considered as near duplicates
+# after testing a few values, seems like 1 makes the most sense for my simhash implementation
 
 def iter_corpus_files(corpus_dir):
     """
@@ -34,13 +41,20 @@ def count_document_terms(sections):
 
     return raw_counts, weighted_counts
 
+def get_term_positions(text):
+    """
+    Returns a map from each stemmed token to the positions where it appears in the document's plain text.
+    """
+    positions = defaultdict(list)
+
+    for position, token in enumerate(stem_tokens(tokenize_text(text))):
+        positions[token].append(position)
+
+    return positions
 
 # helpers for duplicate detection:
 def get_similarity_tokens(text):
     return list(stem_tokens(tokenize_text(text)))
-
-def compute_exact_signature(tokens):
-    return stable_hash_64(" ".join(tokens))
 
 def find_near_duplicate(simhash, kept_simhashes, threshold=NEAR_DUPLICATE_THRESHOLD):
     for doc_id, kept_simhash in kept_simhashes:
@@ -55,23 +69,16 @@ def build_index(corpus_dir):
     """
     inverted_index = defaultdict(list)
     doc_map = {}
-
-    seen_exact_signatures = set()
     kept_simhashes = []
-
     documents_seen = 0
-    exact_duplicates_removed = 0
     near_duplicates_removed = 0
 
     for file_path in iter_corpus_files(corpus_dir):
         documents_seen += 1
         parsed_document = parse_document(file_path)
+        term_positions = get_term_positions(parsed_document["text"])
         similarity_tokens = get_similarity_tokens(parsed_document["text"])
         if not similarity_tokens:
-            continue
-        exact_signature = compute_exact_signature(similarity_tokens)
-        if exact_signature in seen_exact_signatures:
-            exact_duplicates_removed += 1
             continue
         document_simhash = compute_simhash(similarity_tokens)
         near_duplicate_doc_id = find_near_duplicate(document_simhash, kept_simhashes)
@@ -80,7 +87,6 @@ def build_index(corpus_dir):
             near_duplicates_removed += 1
             continue
         doc_id = len(doc_map)
-        seen_exact_signatures.add(exact_signature)
         kept_simhashes.append((doc_id, document_simhash))
         raw_counts, weighted_counts = count_document_terms(parsed_document["sections"])
 
@@ -94,12 +100,12 @@ def build_index(corpus_dir):
                 "doc_id": doc_id,
                 "tf": term_frequency,
                 "weighted_tf": weighted_counts[token],
+                "positions": term_positions.get(token, []),
             })
 
     duplicate_stats = {
         "documents_seen": documents_seen,
         "documents_indexed": len(doc_map),
-        "exact_duplicates_removed": exact_duplicates_removed,
         "near_duplicates_removed": near_duplicates_removed,
     }
 
@@ -157,12 +163,11 @@ def save_index(inverted_index, doc_map, output_dir, duplicate_stats=None):
 
 def main():
     inverted_index, doc_map, duplicate_stats = build_index("ANALYST")
-    stats = save_index(inverted_index, doc_map, "index_data")
+    stats = save_index(inverted_index, doc_map, "index_data", duplicate_stats)
 
     print(f"No. Documents seen: {stats['documents_seen']}\n"
         f"No. Documents indexed: {stats['documents_indexed']}\n"
-        f"No. Exact duplicates removed: {stats['exact_duplicates_removed']}\n"
-        f"No. Near duplicates removed: {stats['near_duplicates_removed']}\n"
+        f"No. Near or exact duplicates removed: {stats['near_duplicates_removed']}\n"
         f"No. Unique tokens: {stats['unique_tokens']}\n"
         f"Index size (KB): {stats['index_size_bytes']}")
 
