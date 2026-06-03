@@ -1,6 +1,10 @@
 """
-Most of the code here is from my submission for Assignment 2
+Assignment 3 Group:
+Qian Ying Wong, 49411619
+Most of the code here is from my submission for Assignment 1, tokenization
 """
+
+
 SIMHASH_BITS = 64
 
 

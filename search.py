@@ -1,9 +1,15 @@
+"""
+Assignment 3 Group:
+Qian Ying Wong, 49411619
+"""
+
 import argparse
 import json
 import time
 import math
 from pathlib import Path
 from collections import defaultdict
+from indexer import get_bigrams
 from text_processing import stem_tokens, tokenize_text
 
 
@@ -25,10 +31,13 @@ def load_search_data(index_dir):
     with open(index_path / "inverted_index.json", "r", encoding="utf-8") as file:
         inverted_index = json.load(file)
 
+    with open(index_path / "bigram_index.json", "r", encoding="utf-8") as file:
+        bigram_index = json.load(file)
+
     with open(index_path / "doc_map.json", "r", encoding="utf-8") as file:
         doc_map = json.load(file)
 
-    return inverted_index, doc_map
+    return inverted_index, bigram_index, doc_map
 
 
 def normalize_query(query):
@@ -84,13 +93,14 @@ def get_minimum_query_span(query_tokens, document_positions):
     return best_span
 
 
-def search(query, inverted_index, doc_map, top_k=5):
+def search(query, inverted_index, bigram_index, doc_map, top_k=5):
     """
     Runs an OR query and returns the top results ranked by weighted tf-idf.
     Ranking formula:
     score(document, query) = sum(weighted_tf(term, document) * idf(term))
     """
     query_tokens = normalize_query(query)
+    query_bigrams = get_bigrams(query_tokens)
 
     if not query_tokens:
         return []
@@ -114,8 +124,9 @@ def search(query, inverted_index, doc_map, top_k=5):
     term_frequencies = {doc_id: 0 for doc_id in candidate_doc_ids}
     matched_terms = {doc_id: 0 for doc_id in candidate_doc_ids} # tie breaker
     positions_by_doc = {doc_id: {} for doc_id in candidate_doc_ids}
+    bigram_scores = {doc_id: 0.0 for doc_id in candidate_doc_ids}
 
-    # calculate tf-idf scores for each matching document
+    # tf-idf
     for token, postings in postings_by_token:
         document_frequency = len(postings)
         inverse_document_frequency = math.log(
@@ -133,6 +144,7 @@ def search(query, inverted_index, doc_map, top_k=5):
 
     proximity_scores = {doc_id: 0.0 for doc_id in candidate_doc_ids}
 
+    # position and proximity
     for doc_id in candidate_doc_ids:
         minimum_span = get_minimum_query_span(query_tokens, positions_by_doc[doc_id])
 
@@ -140,6 +152,20 @@ def search(query, inverted_index, doc_map, top_k=5):
             # adjacent query terms have bigger bonus scores
             proximity_scores[doc_id] = len(query_tokens) / (minimum_span + 1)
             scores[doc_id] += proximity_scores[doc_id]
+
+    # 2-gram
+    for bigram in query_bigrams:
+        postings = bigram_index.get(bigram)
+
+        if postings is None:
+            continue
+
+        for posting in postings:
+            doc_id = posting["doc_id"]
+
+            if doc_id in candidate_doc_ids:
+                bigram_scores[doc_id] += posting["tf"]
+                scores[doc_id] += posting["tf"] * 2.0  # exactly adjacent gets big boost
 
     # sort candidate documents best to worst:
     # 1. highest tf-idf score
@@ -166,6 +192,7 @@ def search(query, inverted_index, doc_map, top_k=5):
             "tf": term_frequencies[doc_id],
             "matched_terms": matched_terms[doc_id],
             "proximity": proximity_scores[doc_id],
+            "bigram": bigram_scores[doc_id],
         })
 
     return results
@@ -184,18 +211,19 @@ def print_results(query, results, elapsed_time):
             f"   score={result['score']:.4f} "
             f"tf={result['tf']} "
             f"matched_terms={result['matched_terms']} "
-            f"proximity={result['proximity']:.4f}"
+            f"proximity={result['proximity']:.4f} "
+            f"bigram={result['bigram']:.4f}"
         )
 
 def print_required_queries(index_dir):
     """
     Prints the required M2 query results to the terminal.
     """
-    inverted_index, doc_map = load_search_data(index_dir)
+    inverted_index, bigram_index, doc_map = load_search_data(index_dir)
 
     for query in REQUIRED_QUERIES:
         start_time = time.perf_counter()
-        results = search(query, inverted_index, doc_map)
+        results = search(query, inverted_index, bigram_index, doc_map)
         elapsed_time = time.perf_counter() - start_time
         print_results(query, results, elapsed_time)
 
@@ -205,7 +233,7 @@ def run_interactive_search(index_dir):
     Runs a text-based search interface.
     """
     print("Loading index...")
-    inverted_index, doc_map = load_search_data(index_dir)
+    inverted_index, bigram_index, doc_map = load_search_data(index_dir)
     print("Search engine ready. Type a query, or type q to quit.")
 
     while True:
@@ -214,7 +242,7 @@ def run_interactive_search(index_dir):
             break
 
         start_time = time.perf_counter()
-        results = search(query, inverted_index, doc_map)
+        results = search(query, inverted_index, bigram_index, doc_map)
         elapsed_time = time.perf_counter() - start_time
 
         print_results(query, results, elapsed_time)

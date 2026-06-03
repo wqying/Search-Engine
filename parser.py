@@ -1,3 +1,8 @@
+"""
+Assignment 3 Group:
+Qian Ying Wong, 49411619
+"""
+
 import json
 import warnings
 from bs4 import BeautifulSoup

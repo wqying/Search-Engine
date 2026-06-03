@@ -4,7 +4,6 @@ Qian Ying Wong, 49411619
 """
 
 import json
-# import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -63,11 +62,25 @@ def find_near_duplicate(simhash, kept_simhashes, threshold=NEAR_DUPLICATE_THRESH
     return None
 
 
+def get_bigrams(tokens): # decided to just do 2-grams instead of 3
+    """
+    Returns adjacent 2-token phrases from a token list.
+    Eg: ["the", "cat", "sat"] -> ["the cat", "cat sat"]
+    """
+    bigrams = []
+    for i in range(len(tokens) - 1):
+        bigram = tokens[i] + " " + tokens[i + 1]
+        bigrams.append(bigram)
+
+    return bigrams
+
+
 def build_index(corpus_dir):
     """
     Builds an inverted index and document map from the corpus.
     """
     inverted_index = defaultdict(list)
+    bigram_index = defaultdict(list)
     doc_map = {}
     kept_simhashes = []
     documents_seen = 0
@@ -78,6 +91,10 @@ def build_index(corpus_dir):
         parsed_document = parse_document(file_path)
         term_positions = get_term_positions(parsed_document["text"])
         similarity_tokens = get_similarity_tokens(parsed_document["text"])
+        document_bigrams = get_bigrams(similarity_tokens)
+        bigram_counts = defaultdict(int)
+        for bigram in document_bigrams:
+            bigram_counts[bigram] += 1
         if not similarity_tokens:
             continue
         document_simhash = compute_simhash(similarity_tokens)
@@ -103,13 +120,19 @@ def build_index(corpus_dir):
                 "positions": term_positions.get(token, []),
             })
 
+        for bigram, frequency in bigram_counts.items():
+            bigram_index[bigram].append({
+                "doc_id": doc_id,
+                "tf": frequency,
+            })
+
     duplicate_stats = {
         "documents_seen": documents_seen,
         "documents_indexed": len(doc_map),
         "near_duplicates_removed": near_duplicates_removed,
     }
 
-    return dict(inverted_index), doc_map, duplicate_stats
+    return dict(inverted_index), dict(bigram_index), doc_map, duplicate_stats
 
 
 def save_json(data, file_path):
@@ -133,7 +156,7 @@ def get_directory_size(directory):
     return total_size // 1024  # convert bytes to KB
 
 
-def save_index(inverted_index, doc_map, output_dir, duplicate_stats=None):
+def save_index(inverted_index, bigram_index, doc_map, output_dir, duplicate_stats=None):
     """
     Saves index artifacts and stats to disk.
     """
@@ -141,15 +164,18 @@ def save_index(inverted_index, doc_map, output_dir, duplicate_stats=None):
     output_path.mkdir(parents=True, exist_ok=True)
 
     inverted_index_path = output_path / "inverted_index.json"
+    bigram_index_path = output_path / "bigram_index.json"
     doc_map_path = output_path / "doc_map.json"
     stats_path = output_path / "stats.json"
 
     save_json(inverted_index, inverted_index_path)
+    save_json(bigram_index, bigram_index_path)
     save_json(doc_map, doc_map_path)
 
     stats = {
         "documents": len(doc_map),
         "unique_tokens": len(inverted_index),
+        "unique_bigrams": len(bigram_index),
         "index_size_bytes": 0,
     }
     if duplicate_stats:
@@ -162,8 +188,8 @@ def save_index(inverted_index, doc_map, output_dir, duplicate_stats=None):
 
 
 def main():
-    inverted_index, doc_map, duplicate_stats = build_index("ANALYST")
-    stats = save_index(inverted_index, doc_map, "index_data", duplicate_stats)
+    inverted_index, bigram_index, doc_map, duplicate_stats = build_index("ANALYST")
+    stats = save_index(inverted_index, bigram_index, doc_map, "index_data", duplicate_stats)
 
     print(f"No. Documents seen: {stats['documents_seen']}\n"
         f"No. Documents indexed: {stats['documents_indexed']}\n"
