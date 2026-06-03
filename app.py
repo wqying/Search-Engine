@@ -17,7 +17,7 @@ RESULTS_PER_PAGE = 10
 app = Flask(__name__)
 
 print("Loading search index...")
-inverted_index, bigram_index, doc_map = load_search_data(INDEX_DIR)
+inverted_index, bigram_index, pagerank, doc_map = load_search_data(INDEX_DIR)
 print("Search index loaded.")
 
 
@@ -37,6 +37,7 @@ def home():
             query,
             inverted_index,
             bigram_index,
+            pagerank,
             doc_map,
             top_k=RESULTS_PER_PAGE + 1,
             offset=offset,

@@ -17,6 +17,8 @@ QUERY_STOP_WORDS = { # ignored during ranking bc they've been messing with resul
     "of", "on", "or", "that", "the", "to",
     "with",
 }
+PAGERANK_WEIGHT = 10
+
 
 def load_search_data(index_dir):
     """
@@ -30,10 +32,13 @@ def load_search_data(index_dir):
     with open(index_path / "bigram_index.json", "r", encoding="utf-8") as file:
         bigram_index = json.load(file)
 
+    with open(index_path / "pagerank.json", "r", encoding="utf-8") as file:
+        pagerank = json.load(file)
+
     with open(index_path / "doc_map.json", "r", encoding="utf-8") as file:
         doc_map = json.load(file)
 
-    return inverted_index, bigram_index, doc_map
+    return inverted_index, bigram_index, pagerank, doc_map
 
 
 def normalize_query(query):
@@ -94,7 +99,7 @@ def get_minimum_query_span(query_tokens, document_positions):
     return best_span
 
 
-def search(query, inverted_index, bigram_index, doc_map, top_k=10, offset=0):
+def search(query, inverted_index, bigram_index, pagerank, doc_map, top_k=10, offset=0):
     """
     Runs an OR query and returns the top results ranked by weighted tf-idf, proximity, and bigram matches.
     """
@@ -171,6 +176,18 @@ def search(query, inverted_index, bigram_index, doc_map, top_k=10, offset=0):
         query_coverage = matched_terms[doc_id] / len(query_tokens)
         scores[doc_id] *= query_coverage
 
+    pagerank_scores = {doc_id: pagerank.get(str(doc_id), 0.0) for doc_id in candidate_doc_ids}
+
+    max_pagerank = max(pagerank_scores.values()) if pagerank_scores else 0.0
+
+    for doc_id in candidate_doc_ids:
+        if max_pagerank > 0:
+            normalized_pagerank = pagerank_scores[doc_id] / max_pagerank
+        else:
+            normalized_pagerank = 0.0
+
+        scores[doc_id] += normalized_pagerank * PAGERANK_WEIGHT
+
     # sort candidate documents best to worst:
     # 1. highest tf-idf score
     # 2. if tied, highest number of matched query terms
@@ -197,6 +214,7 @@ def search(query, inverted_index, bigram_index, doc_map, top_k=10, offset=0):
             "matched_terms": matched_terms[doc_id],
             "proximity": proximity_scores[doc_id],
             "bigram": bigram_scores[doc_id],
+            "pagerank": pagerank_scores[doc_id],
         })
 
     return results
