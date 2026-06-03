@@ -3,9 +3,7 @@ Assignment 3 Group:
 Qian Ying Wong, 49411619
 """
 
-import argparse
 import json
-import time
 import math
 from pathlib import Path
 from collections import defaultdict
@@ -14,13 +12,12 @@ from text_processing import stem_tokens, tokenize_text
 
 
 DEFAULT_INDEX_DIR = "index_data"
-REQUIRED_QUERIES = [ # just for M2
-    "cristina lopes",
-    "machine learning",
-    "ACM",
-    "master of software engineering",
-]
-
+QUERY_STOP_WORDS = { # ignored during ranking bc they've been messing with results
+    "a", "an", "and", "are", "as", "at",
+    "be", "by", "for", "from", "in", "is",
+    "of", "on", "or", "that", "the", "to",
+    "with",
+}
 
 def load_search_data(index_dir):
     """
@@ -42,10 +39,15 @@ def load_search_data(index_dir):
 
 def normalize_query(query):
     """
-    Tokenizes and stems a query using the same processing as the indexer.
+    Tokenizes and stems a query using the same processing as the indexer,
+    but also removes stop words that were found to be hurting ranking performance.
     """
-    tokens = stem_tokens(tokenize_text(query))
-    return list(dict.fromkeys(tokens))
+    filtered_tokens = []
+    for token in tokenize_text(query):
+        if token not in QUERY_STOP_WORDS:
+            filtered_tokens.append(token)
+    stemmed_tokens = stem_tokens(filtered_tokens)
+    return list(dict.fromkeys(stemmed_tokens))
 
 
 def get_minimum_query_span(query_tokens, document_positions):
@@ -95,9 +97,7 @@ def get_minimum_query_span(query_tokens, document_positions):
 
 def search(query, inverted_index, bigram_index, doc_map, top_k=10):
     """
-    Runs an OR query and returns the top results ranked by weighted tf-idf.
-    Ranking formula:
-    score(document, query) = sum(weighted_tf(term, document) * idf(term))
+    Runs an OR query and returns the top results ranked by weighted tf-idf, proximity, and bigram matches.
     """
     query_tokens = normalize_query(query)
     query_bigrams = get_bigrams(query_tokens)
@@ -124,6 +124,8 @@ def search(query, inverted_index, bigram_index, doc_map, top_k=10):
     term_frequencies = {doc_id: 0 for doc_id in candidate_doc_ids}
     matched_terms = {doc_id: 0 for doc_id in candidate_doc_ids} # tie breaker
     positions_by_doc = {doc_id: {} for doc_id in candidate_doc_ids}
+
+    proximity_scores = {doc_id: 0.0 for doc_id in candidate_doc_ids}
     bigram_scores = {doc_id: 0.0 for doc_id in candidate_doc_ids}
 
     # tf-idf
@@ -142,8 +144,6 @@ def search(query, inverted_index, bigram_index, doc_map, top_k=10):
                 matched_terms[doc_id] += 1
                 positions_by_doc[doc_id][token] = posting.get("positions", [])
 
-    proximity_scores = {doc_id: 0.0 for doc_id in candidate_doc_ids}
-
     # position and proximity
     for doc_id in candidate_doc_ids:
         minimum_span = get_minimum_query_span(query_tokens, positions_by_doc[doc_id])
@@ -151,7 +151,7 @@ def search(query, inverted_index, bigram_index, doc_map, top_k=10):
         if minimum_span is not None:
             # adjacent query terms have bigger bonus scores
             proximity_scores[doc_id] = len(query_tokens) / (minimum_span + 1)
-            scores[doc_id] += proximity_scores[doc_id]
+            scores[doc_id] += proximity_scores[doc_id] * 2.0 # proximity gets big boost, but less than bigram
 
     # 2-gram
     for bigram in query_bigrams:
@@ -165,7 +165,12 @@ def search(query, inverted_index, bigram_index, doc_map, top_k=10):
 
             if doc_id in candidate_doc_ids:
                 bigram_scores[doc_id] += posting["tf"]
-                scores[doc_id] += posting["tf"] * 2.0  # exactly adjacent gets big boost
+                scores[doc_id] += posting["tf"] * 4.0  # exactly adjacent gets ginormous boost
+
+    # ensure documents that match more of the query are ranked higher than those that only match a small portion
+    for doc_id in candidate_doc_ids:
+        query_coverage = matched_terms[doc_id] / len(query_tokens)
+        scores[doc_id] *= query_coverage
 
     # sort candidate documents best to worst:
     # 1. highest tf-idf score
@@ -197,68 +202,3 @@ def search(query, inverted_index, bigram_index, doc_map, top_k=10):
 
     return results
 
-
-def print_results(query, results, elapsed_time):
-    """
-    Prints one query's search results.
-    """
-    print(f"\nQuery: {query}")
-    print(f"Returned {len(results)} result(s) in {elapsed_time:.4f} seconds")
-
-    for rank, result in enumerate(results, start=1):
-        print(f"{rank}. {result['url']}")
-        print(
-            f"   score={result['score']:.4f} "
-            f"tf={result['tf']} "
-            f"matched_terms={result['matched_terms']} "
-            f"proximity={result['proximity']:.4f} "
-            f"bigram={result['bigram']:.4f}"
-        )
-
-def print_required_queries(index_dir):
-    """
-    Prints the required M2 query results to the terminal.
-    """
-    inverted_index, bigram_index, doc_map = load_search_data(index_dir)
-
-    for query in REQUIRED_QUERIES:
-        start_time = time.perf_counter()
-        results = search(query, inverted_index, bigram_index, doc_map)
-        elapsed_time = time.perf_counter() - start_time
-        print_results(query, results, elapsed_time)
-
-
-def run_interactive_search(index_dir):
-    """
-    Runs a text-based search interface.
-    """
-    print("Loading index...")
-    inverted_index, bigram_index, doc_map = load_search_data(index_dir)
-    print("Search engine ready. Type a query, or type q to quit.")
-
-    while True:
-        query = input("\nSearch> ").strip()
-        if query.lower() in {"q", "quit", "exit"}:
-            break
-
-        start_time = time.perf_counter()
-        results = search(query, inverted_index, bigram_index, doc_map)
-        elapsed_time = time.perf_counter() - start_time
-
-        print_results(query, results, elapsed_time)
-
-
-def main():
-    arg_parser = argparse.ArgumentParser(description="Search the indexed corpus.")
-    arg_parser.add_argument("--index-dir", default=DEFAULT_INDEX_DIR)
-    arg_parser.add_argument("--required", action="store_true")
-    args = arg_parser.parse_args()
-
-    if args.required:
-        print_required_queries(args.index_dir)
-    else:
-        run_interactive_search(args.index_dir)
-
-
-if __name__ == "__main__":
-    main()

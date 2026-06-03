@@ -12,9 +12,9 @@ from text_processing import stem_tokens, tokenize_text
 from similarity import compute_simhash, hamming_distance, stable_hash_64
 
 
-NEAR_DUPLICATE_THRESHOLD = 1
+NEAR_DUPLICATE_THRESHOLD = 2
 # the smaller the threshold, less documents considered as near duplicates
-# after testing a few values, seems like 1 makes the most sense for my simhash implementation
+# after testing a few values, seems like 1 or 2 makes the most sense for my simhash implementation
 
 def iter_corpus_files(corpus_dir):
     """

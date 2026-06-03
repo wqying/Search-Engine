@@ -1,6 +1,10 @@
+"""
+Web interface for my search engine. Entrace to my project.
+For TAs: install requirements.txt and run `python3 app.py` in the terminal
+"""
+
 import time
 from flask import Flask, render_template, request
-
 from search import load_search_data, search
 
 
