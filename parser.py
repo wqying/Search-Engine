@@ -34,7 +34,7 @@ def parse_document(file_path):
     """
     with open(file_path, "r", encoding="utf-8") as file:
         document = json.load(file)
-
+    
     url = document.get("url", "")
     html = document.get("content", "")
 
@@ -57,8 +57,21 @@ def parse_document(file_path):
             if text:
                 sections.append((text, get_tag_weight(tag_name)))
 
+    links = []
+
+    for anchor in soup.find_all("a"):
+        href = anchor.get("href")
+        anchor_text = anchor.get_text(" ", strip=True)
+
+        if href and anchor_text:
+            links.append({
+                "href": href,
+                "text": anchor_text,
+            })
+
     return {
         "url": url,
         "text": normal_text,  # specifically used for duplicate detection
         "sections": sections,  # used for weighted indexing
+        "links": links,  # used for anchor text for Pagerank graph
     }

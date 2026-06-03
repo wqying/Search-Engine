@@ -9,12 +9,35 @@ from pathlib import Path
 
 from parser import parse_document
 from text_processing import stem_tokens, tokenize_text
-from similarity import compute_simhash, hamming_distance, stable_hash_64
+from similarity import compute_simhash, hamming_distance
+from urllib.parse import urljoin, urldefrag, urlparse, urlunparse
 
 
 NEAR_DUPLICATE_THRESHOLD = 2
 # the smaller the threshold, less documents considered as near duplicates
 # after testing a few values, seems like 1 or 2 makes the most sense for my simhash implementation
+
+
+def normalize_url(url):
+    """
+    Removes fragments
+    """
+    clean_url, _ = urldefrag(url.strip())
+    parts = urlparse(clean_url)
+
+    scheme = parts.scheme.lower()
+    netloc = parts.netloc.lower()
+    path = parts.path or "/"
+
+    for suffix in ("/index.html", "/index.htm", "/index.shtml", "/index.php"):
+        if path.lower().endswith(suffix):
+            path = path[:-len(suffix)] + "/"
+
+    return urlunparse((scheme, netloc, path, "", parts.query, ""))
+
+def normalize_link(source_url, href):
+    return normalize_url(urljoin(source_url, href))
+
 
 def iter_corpus_files(corpus_dir):
     """
@@ -75,42 +98,108 @@ def get_bigrams(tokens): # decided to just do 2-grams instead of 3
     return bigrams
 
 
-def build_index(corpus_dir):
+def compute_pagerank(link_graph, total_documents, damping=0.85, iterations=30):
+    ranks = {doc_id: 1 / total_documents for doc_id in range(total_documents)}
+
+    for _ in range(iterations):
+        new_ranks = {
+            doc_id: (1 - damping) / total_documents
+            for doc_id in range(total_documents)
+        }
+
+        dangling_rank = sum(
+            ranks[doc_id]
+            for doc_id in range(total_documents)
+            if not link_graph.get(doc_id)
+        )
+
+        for doc_id in range(total_documents):
+            new_ranks[doc_id] += damping * dangling_rank / total_documents
+
+        for source_doc_id, targets in link_graph.items():
+            if not targets:
+                continue
+
+            share = damping * ranks[source_doc_id] / len(targets)
+
+            for target_doc_id in targets:
+                new_ranks[target_doc_id] += share
+
+        ranks = new_ranks
+
+    return {str(doc_id): rank for doc_id, rank in ranks.items()}
+
+def collect_kept_documents(corpus_dir):
     """
-    Builds an inverted index and document map from the corpus.
+    First pass over the corpus:
+    Parses documents, removes near duplicates, assigns doc_ids, and builds
+    URL lookup structures needed for link graph and anchor text indexing.
     """
-    inverted_index = defaultdict(list)
-    bigram_index = defaultdict(list)
+    kept_documents = []
     doc_map = {}
+    url_to_doc_id = {}
     kept_simhashes = []
+
     documents_seen = 0
     near_duplicates_removed = 0
 
     for file_path in iter_corpus_files(corpus_dir):
         documents_seen += 1
+
         parsed_document = parse_document(file_path)
-        term_positions = get_term_positions(parsed_document["text"])
         similarity_tokens = get_similarity_tokens(parsed_document["text"])
-        document_bigrams = get_bigrams(similarity_tokens)
-        bigram_counts = defaultdict(int)
-        for bigram in document_bigrams:
-            bigram_counts[bigram] += 1
+
         if not similarity_tokens:
             continue
+
         document_simhash = compute_simhash(similarity_tokens)
         near_duplicate_doc_id = find_near_duplicate(document_simhash, kept_simhashes)
 
         if near_duplicate_doc_id is not None:
             near_duplicates_removed += 1
             continue
-        doc_id = len(doc_map)
+
+        doc_id = len(kept_documents)
+        normalized_url = normalize_url(parsed_document["url"])
+
         kept_simhashes.append((doc_id, document_simhash))
-        raw_counts, weighted_counts = count_document_terms(parsed_document["sections"])
+        url_to_doc_id[normalized_url] = doc_id
 
         doc_map[doc_id] = {
             "url": parsed_document["url"],
+            "normalized_url": normalized_url,
             "path": str(file_path),
         }
+
+        kept_documents.append({
+            "doc_id": doc_id,
+            "parsed_document": parsed_document,
+            "tokens": similarity_tokens,
+            "normalized_url": normalized_url,
+        })
+
+    duplicate_stats = {
+        "documents_seen": documents_seen,
+        "documents_indexed": len(doc_map),
+        "near_duplicates_removed": near_duplicates_removed,
+    }
+
+    return kept_documents, doc_map, url_to_doc_id, duplicate_stats
+
+
+def build_text_indexes(kept_documents):
+    """
+    Builds the unigram inverted index and bigram index for kept documents.
+    """
+    inverted_index = defaultdict(list)
+    bigram_index = defaultdict(list)
+
+    for document in kept_documents:
+        doc_id = document["doc_id"]
+        parsed_document = document["parsed_document"]
+
+        term_positions = get_term_positions(parsed_document["text"])
+        raw_counts, weighted_counts = count_document_terms(parsed_document["sections"])
 
         for token, term_frequency in raw_counts.items():
             inverted_index[token].append({
@@ -120,19 +209,105 @@ def build_index(corpus_dir):
                 "positions": term_positions.get(token, []),
             })
 
+        bigram_counts = defaultdict(int)
+        for bigram in get_bigrams(document["tokens"]):
+            bigram_counts[bigram] += 1
+
         for bigram, frequency in bigram_counts.items():
             bigram_index[bigram].append({
                 "doc_id": doc_id,
                 "tf": frequency,
             })
 
-    duplicate_stats = {
-        "documents_seen": documents_seen,
-        "documents_indexed": len(doc_map),
-        "near_duplicates_removed": near_duplicates_removed,
+    return dict(inverted_index), dict(bigram_index)
+
+
+def build_link_graph(kept_documents, url_to_doc_id):
+    """
+    Builds a graph where each doc_id points to the doc_ids it links to.
+    """
+    link_graph = {
+        document["doc_id"]: set()
+        for document in kept_documents
     }
 
-    return dict(inverted_index), dict(bigram_index), doc_map, duplicate_stats
+    for document in kept_documents:
+        source_doc_id = document["doc_id"]
+        source_url = document["normalized_url"]
+        parsed_document = document["parsed_document"]
+
+        for link in parsed_document.get("links", []):
+            target_url = normalize_link(source_url, link["href"])
+            target_doc_id = url_to_doc_id.get(target_url)
+
+            if target_doc_id is None:
+                continue
+
+            if target_doc_id == source_doc_id:
+                continue
+
+            link_graph[source_doc_id].add(target_doc_id)
+
+    return link_graph
+
+
+def build_anchor_index(kept_documents, url_to_doc_id):
+    """
+    Builds an anchor-text index for target pages.
+    """
+    anchor_counts = defaultdict(lambda: defaultdict(int))
+
+    for document in kept_documents:
+        source_url = document["normalized_url"]
+        parsed_document = document["parsed_document"]
+
+        for link in parsed_document.get("links", []):
+            target_url = normalize_link(source_url, link["href"])
+            target_doc_id = url_to_doc_id.get(target_url)
+
+            if target_doc_id is None:
+                continue
+
+            anchor_text = link.get("text", "")
+
+            for token in stem_tokens(tokenize_text(anchor_text)):
+                anchor_counts[target_doc_id][token] += 1
+
+    anchor_index = defaultdict(list)
+
+    for target_doc_id, token_counts in anchor_counts.items():
+        for token, frequency in token_counts.items():
+            anchor_index[token].append({
+                "doc_id": target_doc_id,
+                "tf": frequency,
+            })
+
+    return dict(anchor_index)
+
+
+def build_index(corpus_dir):
+    """
+    Builds index artifacts from the corpus using a two-pass structure.
+    """
+    kept_documents, doc_map, url_to_doc_id, duplicate_stats = collect_kept_documents(corpus_dir)
+    inverted_index, bigram_index = build_text_indexes(kept_documents)
+    link_graph = build_link_graph(kept_documents, url_to_doc_id)
+    pagerank = compute_pagerank(link_graph, len(doc_map))
+    link_graph_json = {
+        str(doc_id): sorted(target_doc_ids)
+        for doc_id, target_doc_ids in link_graph.items()
+    }
+    anchor_index = build_anchor_index(kept_documents, url_to_doc_id)
+
+    return (
+        inverted_index,
+        bigram_index,
+        anchor_index,
+        link_graph_json,
+        pagerank,
+        doc_map,
+        duplicate_stats,
+    )
 
 
 def save_json(data, file_path):
@@ -156,7 +331,7 @@ def get_directory_size(directory):
     return total_size // 1024  # convert bytes to KB
 
 
-def save_index(inverted_index, bigram_index, doc_map, output_dir, duplicate_stats=None):
+def save_index(inverted_index, bigram_index, anchor_index, link_graph, pagerank, doc_map, output_dir, duplicate_stats=None):
     """
     Saves index artifacts and stats to disk.
     """
@@ -165,11 +340,18 @@ def save_index(inverted_index, bigram_index, doc_map, output_dir, duplicate_stat
 
     inverted_index_path = output_path / "inverted_index.json"
     bigram_index_path = output_path / "bigram_index.json"
+    anchor_index_path = output_path / "anchor_index.json"
+    link_graph_path = output_path / "link_graph.json"
+    pagerank_path = output_path / "pagerank.json"
     doc_map_path = output_path / "doc_map.json"
     stats_path = output_path / "stats.json"
+    
 
     save_json(inverted_index, inverted_index_path)
     save_json(bigram_index, bigram_index_path)
+    save_json(anchor_index, anchor_index_path)
+    save_json(link_graph, link_graph_path)
+    save_json(pagerank, pagerank_path)  
     save_json(doc_map, doc_map_path)
 
     stats = {
@@ -177,7 +359,10 @@ def save_index(inverted_index, bigram_index, doc_map, output_dir, duplicate_stat
         "unique_tokens": len(inverted_index),
         "unique_bigrams": len(bigram_index),
         "index_size_bytes": 0,
+        "unique_anchor_tokens": len(anchor_index),
+        "links": sum(len(targets) for targets in link_graph.values()),
     }
+
     if duplicate_stats:
         stats.update(duplicate_stats)
     save_json(stats, stats_path)
@@ -188,13 +373,16 @@ def save_index(inverted_index, bigram_index, doc_map, output_dir, duplicate_stat
 
 
 def main():
-    inverted_index, bigram_index, doc_map, duplicate_stats = build_index("ANALYST")
-    stats = save_index(inverted_index, bigram_index, doc_map, "index_data", duplicate_stats)
+    inverted_index, bigram_index, anchor_index, link_graph, pagerank, doc_map, duplicate_stats = build_index("ANALYST")
+    stats = save_index(inverted_index, bigram_index, anchor_index, link_graph, pagerank, doc_map, "index_data", duplicate_stats)
 
     print(f"No. Documents seen: {stats['documents_seen']}\n"
         f"No. Documents indexed: {stats['documents_indexed']}\n"
         f"No. Near or exact duplicates removed: {stats['near_duplicates_removed']}\n"
         f"No. Unique tokens: {stats['unique_tokens']}\n"
+        f"No. Unique bigrams: {stats['unique_bigrams']}\n"
+        f"No. Unique anchor tokens: {stats['unique_anchor_tokens']}\n"
+        f"No. Links in graph: {stats['links']}\n"
         f"Index size (KB): {stats['index_size_bytes']}")
 
 
