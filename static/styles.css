@@ -140,3 +140,34 @@ h1 {
     border-radius: 8px;
     color: #6b7280;
 }
+
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.pagination a,
+.pagination span {
+    min-width: 86px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.pagination a {
+    background: #2563eb;
+    color: white;
+    text-decoration: none;
+}
+
+.pagination a:hover {
+    background: #1d4ed8;
+}
+
+.pagination span {
+    color: #4b5563;
+}

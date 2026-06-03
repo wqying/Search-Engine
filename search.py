@@ -1,5 +1,5 @@
 """
-Assignment 3 Group:
+Assignment 3 (Information Analyst Track) Group Member(s):
 Qian Ying Wong, 49411619
 """
 
@@ -11,7 +11,6 @@ from indexer import get_bigrams
 from text_processing import stem_tokens, tokenize_text
 
 
-DEFAULT_INDEX_DIR = "index_data"
 QUERY_STOP_WORDS = { # ignored during ranking bc they've been messing with results
     "a", "an", "and", "are", "as", "at",
     "be", "by", "for", "from", "in", "is",
@@ -95,7 +94,7 @@ def get_minimum_query_span(query_tokens, document_positions):
     return best_span
 
 
-def search(query, inverted_index, bigram_index, doc_map, top_k=10):
+def search(query, inverted_index, bigram_index, doc_map, top_k=10, offset=0):
     """
     Runs an OR query and returns the top results ranked by weighted tf-idf, proximity, and bigram matches.
     """
@@ -165,7 +164,7 @@ def search(query, inverted_index, bigram_index, doc_map, top_k=10):
 
             if doc_id in candidate_doc_ids:
                 bigram_scores[doc_id] += posting["tf"]
-                scores[doc_id] += posting["tf"] * 4.0  # exactly adjacent gets ginormous boost
+                scores[doc_id] += posting["tf"] * 4.0  # exactly adjacent gets stronger boost
 
     # ensure documents that match more of the query are ranked higher than those that only match a small portion
     for doc_id in candidate_doc_ids:
@@ -188,7 +187,7 @@ def search(query, inverted_index, bigram_index, doc_map, top_k=10):
     )
 
     results = []
-    for doc_id in ranked_doc_ids[:top_k]:
+    for doc_id in ranked_doc_ids[offset:offset + top_k]:
         document = doc_map[str(doc_id)]
         results.append({
             "doc_id": doc_id,
@@ -201,4 +200,3 @@ def search(query, inverted_index, bigram_index, doc_map, top_k=10):
         })
 
     return results
-

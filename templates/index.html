@@ -43,7 +43,7 @@
                 {% if results %}
                     {% for result in results %}
                         <article class="result-card">
-                            <div class="result-rank">#{{ loop.index }}</div>
+                            <div class="result-rank">#{{ start_rank + loop.index }}</div>
 
                             <div class="result-main">
                                 <a class="result-url" href="{{ result.url }}" target="_blank">
@@ -60,6 +60,18 @@
                             </div>
                         </article>
                     {% endfor %}
+
+                    <nav class="pagination" aria-label="Search results pages">
+                        {% if page > 1 %}
+                            <a href="{{ url_for('home', q=query, page=page - 1) }}">Previous</a>
+                        {% endif %}
+
+                        <span>Page {{ page }}</span>
+
+                        {% if has_next %}
+                            <a href="{{ url_for('home', q=query, page=page + 1) }}">Next</a>
+                        {% endif %}
+                    </nav>
                 {% else %}
                     <p class="empty-state">No results found.</p>
                 {% endif %}

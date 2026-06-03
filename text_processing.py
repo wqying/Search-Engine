@@ -1,5 +1,5 @@
 """
-Assignment 3 Group:
+Assignment 3 (Information Analyst Track) Group Member(s):
 Qian Ying Wong, 49411619
 Most of the code here is from my submission for Assignment 1, tokenization
 """
