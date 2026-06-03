@@ -1,0 +1,142 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f5f7fb;
+    color: #1f2937;
+}
+
+.page {
+    width: min(960px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 56px 0;
+}
+
+.search-panel {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+h1 {
+    margin: 0 0 24px;
+    font-size: 42px;
+    font-weight: 700;
+    color: #111827;
+}
+
+.search-form {
+    display: flex;
+    gap: 10px;
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.search-form input {
+    flex: 1;
+    height: 48px;
+    padding: 0 16px;
+    border: 1px solid #d1d5db;
+    border-radius: 8px;
+    font-size: 16px;
+    background: white;
+}
+
+.search-form button {
+    height: 48px;
+    padding: 0 22px;
+    border: none;
+    border-radius: 8px;
+    background: #2563eb;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.search-form button:hover {
+    background: #1d4ed8;
+}
+
+.quick-queries {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.quick-queries a {
+    padding: 7px 11px;
+    border-radius: 999px;
+    background: #e0ecff;
+    color: #1d4ed8;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.results-summary {
+    color: #6b7280;
+    margin-bottom: 14px;
+}
+
+.results {
+    display: grid;
+    gap: 12px;
+}
+
+.result-card {
+    display: flex;
+    gap: 14px;
+    padding: 18px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: white;
+}
+
+.result-rank {
+    min-width: 42px;
+    font-weight: 700;
+    color: #2563eb;
+}
+
+.result-main {
+    min-width: 0;
+}
+
+.result-url {
+    display: block;
+    color: #111827;
+    font-size: 17px;
+    font-weight: 600;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+
+.result-url:hover {
+    text-decoration: underline;
+}
+
+.score-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.score-row span {
+    padding: 5px 8px;
+    border-radius: 6px;
+    background: #f3f4f6;
+    color: #4b5563;
+    font-size: 13px;
+}
+
+.empty-state {
+    padding: 28px;
+    text-align: center;
+    background: white;
+    border-radius: 8px;
+    color: #6b7280;
+}

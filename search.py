@@ -93,7 +93,7 @@ def get_minimum_query_span(query_tokens, document_positions):
     return best_span
 
 
-def search(query, inverted_index, bigram_index, doc_map, top_k=5):
+def search(query, inverted_index, bigram_index, doc_map, top_k=10):
     """
     Runs an OR query and returns the top results ranked by weighted tf-idf.
     Ranking formula:

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Search Engine</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <main class="page">
+        <section class="search-panel">
+            <h1>Search Engine</h1>
+
+            <form method="get" action="/" class="search-form">
+                <input
+                    type="text"
+                    name="q"
+                    value="{{ query }}"
+                    placeholder="Search the corpus..."
+                    autofocus
+                >
+                <button type="submit">Search</button>
+            </form>
+
+            <div class="quick-queries">
+                <a href="/?q=cristina+lopes">cristina lopes</a>
+                <a href="/?q=machine+learning">machine learning</a>
+                <a href="/?q=ACM">ACM</a>
+                <a href="/?q=master+of+software+engineering">master of software engineering</a>
+            </div>
+        </section>
+
+        {% if query %}
+            <section class="results-summary">
+                <p>
+                    Returned {{ results|length }} result(s)
+                    {% if elapsed_time is not none %}
+                        in {{ "%.4f"|format(elapsed_time) }} seconds
+                    {% endif %}
+                </p>
+            </section>
+
+            <section class="results">
+                {% if results %}
+                    {% for result in results %}
+                        <article class="result-card">
+                            <div class="result-rank">#{{ loop.index }}</div>
+
+                            <div class="result-main">
+                                <a class="result-url" href="{{ result.url }}" target="_blank">
+                                    {{ result.url }}
+                                </a>
+
+                                <div class="score-row">
+                                    <span>score {{ "%.4f"|format(result.score) }}</span>
+                                    <span>tf {{ result.tf }}</span>
+                                    <span>matched {{ result.matched_terms }}</span>
+                                    <span>proximity {{ "%.4f"|format(result.proximity) }}</span>
+                                    <span>bigram {{ "%.4f"|format(result.bigram) }}</span>
+                                </div>
+                            </div>
+                        </article>
+                    {% endfor %}
+                {% else %}
+                    <p class="empty-state">No results found.</p>
+                {% endif %}
+            </section>
+        {% endif %}
+    </main>
+</body>
+</html>
